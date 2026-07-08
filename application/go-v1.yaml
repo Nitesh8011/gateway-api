@@ -1,0 +1,42 @@
+# app-v1.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example-app-go-v1
+  namespace: envoy-gateway-system
+  labels:
+    app: example-app-go
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: example-app-go
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: example-app-go
+        version: v1
+    spec:
+      containers:
+        - name: http-echo
+          image: hashicorp/http-echo:1.0
+          args:
+            - "-text=Hello from example-app-go v1"
+            - "-listen=:8080"
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-app-go-v1
+  namespace: envoy-gateway-system
+spec:
+  selector:
+    app: example-app-go
+    version: v1
+  ports:
+    - port: 8080
+      targetPort: 8080
