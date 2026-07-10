@@ -1,20 +1,21 @@
-# Step 3 — HTTPRoutes for example-app-go.com
+# Step 3 — HTTPRoutes for example-app.com
 
-Prereq: step 2 done — `kubectl describe gateway/eg -n default` shows the `https` listener `Programmed: True`, and a plain `curl` against it returns Envoy's fallback `404` (no route yet).
+Prereq: step 2 done — `kubectl describe gateway/gateway-api -n envoy-gateway-system` shows the `https` listener `Programmed: True`, and a plain `curl` against it returns Envoy's fallback `404` (no route yet).
 
-This step deploys a real backend and writes the `HTTPRoute`s that connect it to the Gateway. We'll build it up in layers: basic routing → weighted canary split → header-based routing → redirect/rewrite — the same layering you'd use on a real service.
+This step deploys a real backend and writes the `HTTPRoute` that connects it to the Gateway. We'll build it up in layers: basic routing → weighted canary split → header-based routing → redirect/rewrite. In this repo, `gateway-yaml/03-httproute.yaml` currently has the weighted canary split rule active, with the header-based and redirect/rewrite rules present but commented out — uncomment them as you work through 3.4 and 3.5 below.
+
+Files referenced below live in `application/` (backends) and `gateway-yaml/` (the route) in this repo.
 
 ## 3.1 Deploy the backend (v1)
 
-Using `hashicorp/http-echo` — a tiny Go binary that echoes back fixed text, good enough to prove routing without needing your actual app image yet. Swap the image/args for your real app whenever you're ready.
+`application/go-v1.yaml` — using `hashicorp/http-echo`, a tiny Go binary that echoes back fixed text, good enough to prove routing without needing your actual app image yet. Note this repo's backend Deployment/Service live in `envoy-gateway-system`, matching the Gateway and HTTPRoute.
 
 ```yaml
-# app-v1.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: example-app-go-v1
-  namespace: default
+  namespace: envoy-gateway-system
   labels:
     app: example-app-go
     version: v1
@@ -43,7 +44,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: example-app-go-v1
-  namespace: default
+  namespace: envoy-gateway-system
 spec:
   selector:
     app: example-app-go
@@ -54,26 +55,27 @@ spec:
 ```
 
 ```bash
-kubectl apply -f app-v1.yaml
-kubectl wait --timeout=2m -n default deployment/example-app-go-v1 --for=condition=Available
+kubectl apply -f application/go-v1.yaml
+kubectl wait --timeout=2m -n envoy-gateway-system deployment/example-app-go-v1 --for=condition=Available
 ```
+
+(Minor housekeeping: `application/go-v2.yml` uses a `.yml` extension while `go-v1.yaml` uses `.yaml` — harmless, but worth renaming to `.yml`→`.yaml` for consistency whenever convenient.)
 
 ## 3.2 Basic HTTPRoute
 
-`parentRefs` is what attaches this route to the Gateway — this is the field that turns a standalone Service into something reachable through Envoy.
+`gateway-yaml/03-httproute.yaml` — `parentRefs` is what attaches this route to the Gateway (`gateway-api`), and it lives in the same `envoy-gateway-system` namespace as that Gateway.
 
 ```yaml
-# httproute.yaml
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: example-app-go
-  namespace: default
+  namespace: envoy-gateway-system
 spec:
   parentRefs:
-    - name: eg
+    - name: gateway-api
   hostnames:
-    - example-app-go.com
+    - example-app.com
   rules:
     - matches:
         - path:
@@ -85,22 +87,22 @@ spec:
 ```
 
 ```bash
-kubectl apply -f httproute.yaml
-kubectl describe httproute example-app-go -n default
+kubectl apply -f gateway-yaml/03-httproute.yaml
+kubectl describe httproute example-app-go -n envoy-gateway-system
 ```
 
-`Accepted: True` and `ResolvedRefs: True` mean the route is valid and its backend Service was found. Check the Gateway too — `Attached Routes` on the `https` listener should now read `1`.
+`Accepted: True` and `ResolvedRefs: True` mean the route is valid and its backend Service was found. Check the Gateway too — `Attached Routes` on the `https` listener should now read `1`. Since the `http` listener has no `hostname` restriction (see the note in step 1), this route is reachable over both HTTP and HTTPS at this point.
 
 ```bash
-kubectl describe gateway/eg -n default
+kubectl describe gateway/gateway-api -n envoy-gateway-system
 ```
 
 Test it (reusing the CA and `GATEWAY_HOST` from step 2):
 
 ```bash
-curl --resolve example-app-go.com:443:$GATEWAY_HOST \
+curl --resolve example-app.com:443:$GATEWAY_HOST \
   --cacert gw-demo-ca.crt \
-  https://example-app-go.com/
+  https://example-app.com/
 # → Hello from example-app-go v1
 ```
 
@@ -108,15 +110,14 @@ That 404 from step 2 is now gone — this is the actual request path from the di
 
 ## 3.3 Add a v2 and split traffic (canary)
 
-Deploy a second version, then split traffic between them by weight. Weights are relative, not percentages — `90`/`10` here means 90% of requests roughly go to v1, 10% to v2.
+`application/go-v2.yml`, also in `envoy-gateway-system`:
 
 ```yaml
-# app-v2.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: example-app-go-v2
-  namespace: default
+  namespace: envoy-gateway-system
   labels:
     app: example-app-go
     version: v2
@@ -145,7 +146,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: example-app-go-v2
-  namespace: default
+  namespace: envoy-gateway-system
 spec:
   selector:
     app: example-app-go
@@ -156,13 +157,12 @@ spec:
 ```
 
 ```bash
-kubectl apply -f app-v2.yaml
+kubectl apply -f application/go-v2.yml
 ```
 
-Update the route's default rule to split across both:
+The route's default rule, already active in `gateway-yaml/03-httproute.yaml`, splits by weight (relative, not literal percentages — `90`/`10` means roughly 90% of requests go to v1, 10% to v2):
 
 ```yaml
-# httproute.yaml (rules section updated)
   rules:
     - matches:
         - path:
@@ -178,21 +178,20 @@ Update the route's default rule to split across both:
 ```
 
 ```bash
-kubectl apply -f httproute.yaml
-for i in $(seq 1 10); do
-  curl -s --resolve example-app-go.com:443:$GATEWAY_HOST --cacert gw-demo-ca.crt https://example-app-go.com/
+kubectl apply -f gateway-yaml/03-httproute.yaml
+for i in $(seq 1 50); do
+  curl -s --resolve example-app.com:443:$GATEWAY_HOST --cacert gw-demo-ca.crt https://example-app.com/
   echo
 done
 ```
 
-You should see mostly v1 responses with the occasional v2 mixed in.
+Use a sample size of 40–50+ before concluding the split isn't working — with only 10 requests, the odds of seeing zero v2 responses by pure chance are around 35%.
 
 ## 3.4 Header-based routing (force canary for specific clients)
 
-A separate rule matched by a request header, placed alongside the weighted-split rule. This is how you'd let internal testers always hit v2 regardless of the canary weight.
+Uncomment the header-matched rule in `gateway-yaml/03-httproute.yaml` (it's already there, commented out) and place it alongside the weighted-split rule. This is how you'd let internal testers always hit v2 regardless of the canary weight.
 
 ```yaml
-# httproute.yaml (add this rule before the default one)
   rules:
     - matches:
         - path:
@@ -218,10 +217,10 @@ A separate rule matched by a request header, placed alongside the weighted-split
 ```
 
 ```bash
-kubectl apply -f httproute.yaml
+kubectl apply -f gateway-yaml/03-httproute.yaml
 
-curl --resolve example-app-go.com:443:$GATEWAY_HOST --cacert gw-demo-ca.crt \
-  -H "x-canary: true" https://example-app-go.com/
+curl --resolve example-app.com:443:$GATEWAY_HOST --cacert gw-demo-ca.crt \
+  -H "x-canary: true" https://example-app.com/
 # → always v2, regardless of the 90/10 weights
 ```
 
@@ -229,13 +228,12 @@ Important nuance: Gateway API does **not** guarantee "first rule in the file win
 
 ## 3.5 Redirect and path rewrite
 
-Two different `HTTPRoute` filters, often confused:
+Also already present, commented out, in `gateway-yaml/03-httproute.yaml`. Two different `HTTPRoute` filters, often confused:
 
 - **RequestRedirect** — tells the *client* to re-request a different URL (a real HTTP 301/302, browser-visible).
 - **URLRewrite** — rewrites the path *internally* before forwarding to the backend; the client never sees it.
 
 ```yaml
-# httproute.yaml (two more rules)
     - matches:
         - path:
             type: PathPrefix
@@ -263,79 +261,20 @@ Two different `HTTPRoute` filters, often confused:
 ```
 
 ```bash
-curl -i --resolve example-app-go.com:443:$GATEWAY_HOST --cacert gw-demo-ca.crt \
-  https://example-app-go.com/old
+curl -i --resolve example-app.com:443:$GATEWAY_HOST --cacert gw-demo-ca.crt \
+  https://example-app.com/old
 # → HTTP/2 301, Location: /
 
-curl --resolve example-app-go.com:443:$GATEWAY_HOST --cacert gw-demo-ca.crt \
-  https://example-app-go.com/v2/anything
+curl --resolve example-app.com:443:$GATEWAY_HOST --cacert gw-demo-ca.crt \
+  https://example-app.com/v2/anything
 # → Hello from example-app-go v2 (canary)  (backend sees "/", not "/v2/anything")
-```
-
-## Full HTTPRoute so far
-
-```yaml
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: example-app-go
-  namespace: default
-spec:
-  parentRefs:
-    - name: eg
-  hostnames:
-    - example-app-go.com
-  rules:
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /old
-      filters:
-        - type: RequestRedirect
-          requestRedirect:
-            path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /
-            statusCode: 301
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /v2
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /
-      backendRefs:
-        - name: example-app-go-v2
-          port: 8080
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /
-          headers:
-            - name: x-canary
-              value: "true"
-      backendRefs:
-        - name: example-app-go-v2
-          port: 8080
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /
-      backendRefs:
-        - name: example-app-go-v1
-          port: 8080
-          weight: 90
-        - name: example-app-go-v2
-          port: 8080
-          weight: 10
 ```
 
 ## What's next
 
-Step 4 adds Prometheus/Grafana metrics and OpenTelemetry tracing so you can actually see this traffic split happening, rather than eyeballing curl output.
+Step 4 adds Prometheus/Grafana metrics and OpenTelemetry tracing so you can actually see this traffic split happening, rather than eyeballing curl output. It also builds on the `EnvoyProxy` resource in `gateway-yaml/02-gateway-config.yaml`.
+
+There are also extra policies in `envoy-specific/` beyond this core walkthrough (connection limits, mTLS, rate limiting) — see the note in the README about those, since a couple of them interact with the testing you've been doing above.
 
 ## Sources
 - [HTTPRoute API reference | Gateway API](https://gateway-api.sigs.k8s.io/reference/spec/#gateway.networking.k8s.io/v1.httproute)

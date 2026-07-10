@@ -2,7 +2,9 @@
 
 Part of a production walkthrough series. Next parts: 02 TLS (cert-manager), 03 Gateway/HTTPRoute YAMLs, 04 Observability.
 
-App used throughout this series: `example-app-go.com`.
+App used throughout this series: `example-app.com`. Everything (Gateway, HTTPRoute, Certificates, backend apps) lives in the `envoy-gateway-system` namespace in this setup — not `default`.
+
+Files referenced below live in `gateway-yaml/` in this repo.
 
 ## 1.1 Start minikube
 
@@ -53,70 +55,82 @@ You should see one `envoy-gateway` pod (the control plane). No data-plane Envoy 
 
 ## 1.3 Create the GatewayClass
 
-This is the one-time "which controller owns this class of Gateways" object from earlier.
+`gateway-yaml/00-gatewayclass.yaml`:
 
 ```yaml
-# gatewayclass.yaml
 apiVersion: gateway.networking.k8s.io/v1
 kind: GatewayClass
 metadata:
-  name: eg
+  name: envoy-gateway
 spec:
   controllerName: gateway.envoyproxy.io/gatewayclass-controller
 ```
 
 ```bash
-kubectl apply -f gatewayclass.yaml
-kubectl get gatewayclass eg -o wide
+kubectl apply -f gateway-yaml/00-gatewayclass.yaml
+kubectl get gatewayclass envoy-gateway -o wide
 ```
 
-`ACCEPTED` should flip to `True` within a few seconds — that's Envoy Gateway's controller confirming it's claimed this class.
+`ACCEPTED` should flip to `True` within a few seconds.
+
+Note: `gateway-yaml/02-gateway-config.yaml` (next in step 4/observability) later re-applies this same `GatewayClass` object with a `parametersRef` added, pointing at an `EnvoyProxy` resource. That's intentional layering, not a conflict — but don't re-apply `00-gatewayclass.yaml` on its own after `02` has run, since doing so would silently strip the `parametersRef` back out.
 
 ## 1.4 Create the Gateway
 
-One listener, plain HTTP for now — step 2 upgrades it to HTTPS. This lives in the `default` namespace, alongside where your app's Service/HTTPRoute will go in step 3.
+`gateway-yaml/01-gateway.yaml` — this repo's setup keeps **both** an HTTP and an HTTPS listener on the Gateway from the start (rather than upgrading later), in the `envoy-gateway-system` namespace:
 
 ```yaml
-# gateway.yaml
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
-  name: eg
-  namespace: default
+  name: gateway-api
+  namespace: envoy-gateway-system
 spec:
-  gatewayClassName: eg
+  gatewayClassName: envoy-gateway
+  infrastructure:
+    labels:
+      app: envoy-gateway
   listeners:
     - name: http
-      port: 80
       protocol: HTTP
-      hostname: "example-app-go.com"
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: "example-app.com"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: example-app-tls-secret
+            namespace: envoy-gateway-system
       allowedRoutes:
         namespaces:
           from: Same
 ```
 
-```bash
-kubectl apply -f gateway.yaml
-kubectl get gateway eg -n default
-```
-
-Wait for it to program:
+For now, apply just the `GatewayClass` + the listener shape without a real cert yet — the `https` listener's `certificateRefs` won't resolve until step 2 issues `example-app-tls-secret`, so `ResolvedRefs` on that listener will show `False` until then. That's expected at this point.
 
 ```bash
-kubectl wait --timeout=2m -n default gateway/eg --for=condition=Programmed
+kubectl apply -f gateway-yaml/01-gateway.yaml
+kubectl get gateway gateway-api -n envoy-gateway-system
 ```
 
-If `PROGRAMMED` stays `False` with reason `AddressNotAssigned`, `minikube tunnel` isn't running — see 1.1.
+Wait for the `http` listener specifically to program (the `https` one won't yet):
 
 ```bash
-kubectl describe gateway/eg -n default
+kubectl describe gateway/gateway-api -n envoy-gateway-system
 ```
 
-The `http` listener should show `Accepted: True` / `ResolvedRefs: True` / `Programmed: True`. No routes are attached yet (`Attached Routes: 0`) — that's expected, since we haven't created an HTTPRoute or backend yet (step 3). A request to this Gateway right now would just get a routing error, not a real response — there's nothing telling Envoy where to send matched traffic until step 3 exists.
+If the Gateway shows no address at all with reason `AddressNotAssigned`, `minikube tunnel` isn't running — see 1.1.
+
+One thing worth flagging now, before it's easy to forget: because the `http` listener here has **no `hostname` restriction**, it's a catch-all — any HTTPRoute bound to this Gateway will also be reachable over plain, unencrypted HTTP on port 80, not just HTTPS. If you want to force clients to HTTPS, you'll want an explicit HTTP→HTTPS redirect rule on the HTTPRoute (not covered by default in this walkthrough — add it if this Gateway is ever exposed beyond your local cluster).
 
 ## What's next
 
-Step 2 upgrades the listener to HTTPS with a cert-manager-issued certificate. Step 3 adds the actual HTTPRoute and backend app — that's the point where requests start getting real responses. Step 4 adds Prometheus/Grafana + OpenTelemetry tracing.
+Step 2 issues the cert-manager certificate this Gateway's `https` listener is already referencing, so `ResolvedRefs`/`Programmed` on it goes `True`. Step 3 adds the actual HTTPRoute and backend app. Step 4 adds Prometheus/Grafana + OpenTelemetry tracing (via the `EnvoyProxy` resource introduced in `02-gateway-config.yaml`).
 
 ## Sources
 - [Install with Helm | Envoy Gateway](https://gateway.envoyproxy.io/docs/install/install-helm/)
