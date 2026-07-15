@@ -16,8 +16,9 @@ Each numbered `.md` file is a self-contained step — run them in order. The act
 | 1 | [`01-install-envoy-gateway.md`](./01-install-envoy-gateway.md) | Done | minikube setup, `minikube tunnel` vs port-forward, Helm install of Envoy Gateway control plane, `GatewayClass`, `Gateway` with HTTP + HTTPS listeners for `example-app.com` |
 | 2 | [`02-tls-cert-manager.md`](./02-tls-cert-manager.md) | Done | cert-manager install, self-signed two-tier CA, Certificate for `example-app.com`, why the `https` listener resolves once the Secret exists, why you get a 404 without an HTTPRoute yet, Let's Encrypt swap for production |
 | 3 | [`03-gateway-httproute-yamls.md`](./03-gateway-httproute-yamls.md) | Done | Backend Deployment/Service, basic HTTPRoute, weighted canary split, header-based routing, redirect vs URL rewrite, rule precedence |
-| 4 | [`04-observability.md`](./04-observability.md) | Done | Envoy Gateway add-ons chart (Prometheus/Grafana/Tempo/OTel Collector), auto-discovered metrics, enabling tracing via the existing `EnvoyProxy` in `02-gateway-config.yaml`, sampling rate production notes |
-| 5 (optional) | [`05-external-otel-endpoint.md`](./05-external-otel-endpoint.md) | Done | Skipping the add-ons chart entirely and pointing tracing/metrics at your own already-running OTel collector — `Backend` CRD for the external URL, TLS via `BackendTLSPolicy`/`Backend.spec.tls`, auth token header, no bundled Prometheus/Grafana/Tempo |
+| 4 | [`04-envoy-specific-policies.md`](./04-envoy-specific-policies.md) | Done | Envoy Gateway-specific CRDs: `ClientTrafficPolicy` (connection limit, mTLS), `BackendTrafficPolicy` (local rate limit), `SecurityPolicy` (currently empty — starter Basic Auth example included) |
+| 5 | [`05-observability.md`](./05-observability.md) | Done | Envoy Gateway add-ons chart (Prometheus/Grafana/Tempo/OTel Collector), auto-discovered metrics, enabling tracing via the existing `EnvoyProxy` in `02-gateway-config.yaml`, sampling rate production notes |
+| 6 (optional) | [`06-external-otel-endpoint.md`](./06-external-otel-endpoint.md) | Done | Skipping the add-ons chart entirely and pointing tracing/metrics at your own already-running OTel collector — `Backend` CRD for the external URL, TLS via `BackendTLSPolicy`/`Backend.spec.tls`, auth token header, no bundled Prometheus/Grafana/Tempo |
 
 ### Repo layout
 
@@ -54,6 +55,8 @@ Fixed directly:
 
 - `envoy-specific/01-backend-traffic.yaml` (`BackendTrafficPolicy`) had no `namespace` set. Its `targetRef` points at the `example-app-go` `HTTPRoute`, which lives in `envoy-gateway-system` — a policy without an explicit namespace resolves against whatever namespace you happen to `kubectl apply` it into, and a `targetRef` can't cross namespaces. Added `namespace: envoy-gateway-system` so it actually attaches.
 - `gateway-yaml/02-gateway-config.yaml`'s `EnvoyProxy` had no tracing config — added `telemetry.tracing` (OpenTelemetry, pointed at the add-ons chart's collector) as part of step 4.
+- **`.gitignore` had a blanket `certs/*` rule**, which was silently excluding `certs/00-ca-bootstrap.yaml` and `certs/01-app-cert.yaml` from git entirely — they had never been committed. Since step 2 of the walkthrough depends on both, a fresh clone of this repo would break immediately at that step. Narrowed the rule to `certs/*.crt`/`*.key`/`*.pem` (actual cert/key material) and added the two manifests.
+- `envoy-specific/01-backend-traffic.yaml` had regressed to a broken, uncommitted edit — `name: ratelimit-go-httproute`, `targetRefs.name: go-route` (no such `HTTPRoute` exists; the real one is `example-app-go`), and the `namespace` fix from the point above was dropped again. It no longer matched its own description in `04-envoy-specific-policies.md` or what's actually running in the cluster. Reverted to the working version.
 
 Flagged, not changed (need your call):
 

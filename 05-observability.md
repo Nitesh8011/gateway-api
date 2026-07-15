@@ -1,10 +1,10 @@
-# Step 4 — Observability: Prometheus, Grafana, OpenTelemetry tracing
+# Step 5 — Observability: Prometheus, Grafana, OpenTelemetry tracing
 
-Prereq: step 3 done — `example-app.com` returns real responses (v1/v2 canary split working).
+Prereq: step 3 done — `example-app.com` returns real responses (v1/v2 canary split working). Step 4's policies (ClientTrafficPolicy/BackendTrafficPolicy/SecurityPolicy) aren't required for this step, but if you applied the mTLS `ClientTrafficPolicy` from 4.1, remember plain `curl --cacert` tests below will fail unless you also pass a client cert.
 
-Envoy Gateway ships a companion "add-ons" Helm chart that bundles Prometheus, Grafana, and Tempo (a tracing backend), plus an optional OpenTelemetry Collector — this is the fastest way to get a working observability stack for learning, without hand-wiring `kube-prometheus-stack` yourself. You'd likely swap Tempo/self-hosted Prometheus for a managed backend in real production, but the wiring on the Envoy Gateway side (metrics sinks, tracing provider) stays identical.
+Envoy Gateway ships a companion "add-ons" Helm chart that bundles Prometheus, Grafana, and Tempo (a tracing backend), plus an optional OpenTelemetry Collector — this is the fastest way to get a working observability stack for learning, without hand-wiring `kube-prometheus-stack` yourself. You'd likely swap Tempo/self-hosted Prometheus for a managed backend in real production, but the wiring on the Envoy Gateway side (metrics sinks, tracing provider) stays identical. If you already run your own OTel collector and don't want any of this bundled stack, skip straight to step 6 instead.
 
-## 4.1 Install the add-ons chart
+## 5.1 Install the add-ons chart
 
 ```bash
 helm install eg-addons oci://docker.io/envoyproxy/gateway-addons-helm \
@@ -22,7 +22,7 @@ kubectl get svc -n monitoring
 
 Note the exact Service names printed (they're prefixed with the release name, e.g. `eg-addons-grafana`, `eg-addons-opentelemetry-collector`, `eg-addons-tempo`) — the tracing config below and the commands after it assume these exact names. If your install used a different Helm release name, adjust accordingly.
 
-## 4.2 Metrics are already flowing — no extra config needed
+## 5.2 Metrics are already flowing — no extra config needed
 
 By default, Envoy Gateway exposes Prometheus-format metrics from both the control plane and every Envoy proxy instance, and the add-ons chart's Prometheus is pre-configured to auto-discover them via pod annotations Envoy Gateway sets automatically. You don't need to write a `ServiceMonitor` by hand for this to work.
 
@@ -34,7 +34,7 @@ kubectl port-forward pod/$ENVOY_GW_POD -n envoy-gateway-system 19001:19001
 curl localhost:19001/metrics | head -20
 ```
 
-## 4.3 View metrics in Grafana
+## 5.3 View metrics in Grafana
 
 ```bash
 kubectl port-forward -n monitoring svc/eg-addons-grafana 3000:80
@@ -54,7 +54,7 @@ for i in $(seq 1 100); do
 done
 ```
 
-## 4.4 Turn on distributed tracing
+## 5.4 Turn on distributed tracing
 
 Tracing is off by default (unlike metrics). In this repo it's configured directly in `gateway-yaml/02-gateway-config.yaml`, extending the `EnvoyProxy` resource (`gateway-configuration`) that's already wired up via the `GatewayClass`'s `parametersRef` — no separate `EnvoyProxy` object needed:
 
@@ -114,7 +114,7 @@ Applying this restarts the Envoy proxy Pod (it's picking up new bootstrap config
 kubectl get pods -n envoy-gateway-system -w
 ```
 
-## 4.5 See a trace
+## 5.5 See a trace
 
 Generate a request, then query Tempo (bundled by the add-ons chart) for it:
 
@@ -131,11 +131,11 @@ Or, easier: open Grafana (already port-forwarded above), go to Explore, pick the
 
 `samplingRate: 100` traces every request — fine for a learning cluster, expensive and noisy in production. For real traffic, drop this to something like `samplingRate: 1` (1%), or use `samplingFraction` for anything below 1% (e.g. `numerator: 1, denominator: 1000` for 0.1%). You can also use `openTelemetry.sampler` with `ParentBasedTraceIdRatio` so downstream services' sampling decisions are respected instead of Envoy always deciding independently.
 
-Swap the bundled Tempo/Prometheus for whatever your organization already runs — Datadog and Zipkin are supported as alternate tracing `provider.type` values, and the metrics `sinks` field on the cluster-wide `EnvoyGateway` config (a `ConfigMap` in `envoy-gateway-system`, not a CRD) supports pushing to an OpenTelemetry metrics sink instead of only exposing a Prometheus scrape endpoint — useful if your metrics backend doesn't scrape and prefers push instead.
+Swap the bundled Tempo/Prometheus for whatever your organization already runs — Datadog and Zipkin are supported as alternate tracing `provider.type` values, and the metrics `sinks` field on the cluster-wide `EnvoyGateway` config (a `ConfigMap` in `envoy-gateway-system`, not a CRD) supports pushing to an OpenTelemetry metrics sink instead of only exposing a Prometheus scrape endpoint — useful if your metrics backend doesn't scrape and prefers push instead. See step 6 for wiring this to your own external collector instead of the bundled one.
 
 ## Where this leaves you
 
-You now have the full stack from the very first diagram, actually running: Gateway API resources (`GatewayClass`, `Gateway`, `HTTPRoute`) driving a real Envoy Gateway control plane, terminating client TLS from cert-manager, routing and splitting traffic across two backend versions, and both metrics and traces flowing into Grafana. From here, `envoy-specific/` in this repo already has a start on `SecurityPolicy`, `BackendTrafficPolicy` (rate limiting), and `ClientTrafficPolicy` (connection limits, mTLS) — see the README for the current state of those and a few things worth double-checking before relying on them.
+You now have the full stack from the very first diagram, actually running: Gateway API resources (`GatewayClass`, `Gateway`, `HTTPRoute`) driving a real Envoy Gateway control plane, terminating client TLS from cert-manager, routing and splitting traffic across two backend versions, the Envoy Gateway-specific policies from step 4, and both metrics and traces flowing into Grafana.
 
 ## Sources
 - [Gateway Observability | Envoy Gateway](https://gateway.envoyproxy.io/docs/tasks/observability/gateway-observability/)

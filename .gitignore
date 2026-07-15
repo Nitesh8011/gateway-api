@@ -1,2 +1,4 @@
-certs/*
+certs/*.crt
+certs/*.key
+certs/*.pem
 gw-demo-ca.crt

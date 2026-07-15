@@ -1,14 +1,14 @@
-# Step 5 (optional) — Point tracing/metrics at your own existing OTel collector
+# Step 6 (optional) — Point tracing/metrics at your own existing OTel collector
 
-For when you already run an OpenTelemetry collector somewhere (in-cluster or external), with its own TLS cert and an auth token/API key it expects on incoming OTLP data, and you don't want the add-ons chart's bundled Prometheus/Grafana/Tempo/OTel Collector from step 4 at all.
+For when you already run an OpenTelemetry collector somewhere (in-cluster or external), with its own TLS cert and an auth token/API key it expects on incoming OTLP data, and you don't want the add-ons chart's bundled Prometheus/Grafana/Tempo/OTel Collector from step 5 at all.
 
-Skip `04-observability.md`'s `helm install eg-addons ...` entirely — that chart is only there to give you *something* to point at for learning. If you already have a real collector, none of that needs to exist in this cluster.
+Skip `05-observability.md`'s `helm install eg-addons ...` entirely — that chart is only there to give you *something* to point at for learning. If you already have a real collector, none of that needs to exist in this cluster.
 
 ## The key thing to understand first
 
 Envoy Gateway's tracing config (`EnvoyProxy.spec.telemetry.tracing.provider`) does **not** take a raw URL string. It takes a `backendRefs` field, which only accepts references to Kubernetes objects — a `Service`, a `ServiceImport`, or Envoy Gateway's own `Backend` CRD. So "passing your OTel URL" means creating one small `Backend` object that wraps your collector's hostname/port, then pointing `backendRefs` at that object instead of at an in-cluster Service. This is the same mechanism used to route any Gateway API traffic to something outside the cluster.
 
-## 5.1 Define your collector as a `Backend`
+## 6.1 Define your collector as a `Backend`
 
 ```yaml
 # otel-backend.yaml
@@ -31,7 +31,7 @@ kubectl apply -f otel-backend.yaml
 kubectl get backend external-otel-collector -n envoy-gateway-system
 ```
 
-## 5.2 TLS to your collector (you said you already have certs)
+## 6.2 TLS to your collector (you said you already have certs)
 
 Two ways to attach TLS, and which one you need depends on what "certs" means for your setup:
 
@@ -87,7 +87,7 @@ spec:
     # evolved across Envoy Gateway releases)
 ```
 
-## 5.3 Auth token on the OTLP export
+## 6.3 Auth token on the OTLP export
 
 If your collector needs a bearer token or API key on every OTLP request (common for hosted/SaaS OTel backends), this is configured as a custom header on the tracing provider. Recent Envoy Gateway releases added support for exactly this — custom headers on OTLP exports, for passing auth tokens — but the precise field name has shifted between releases, so **verify against your installed CRD version** before trusting the shape below:
 
@@ -112,9 +112,9 @@ Look for a `headers` (or similarly named) field under that path. It typically ta
 
 If a plaintext token in the CRD isn't acceptable for your setup, the safer pattern is a Kubernetes `Secret` referenced by name rather than a literal value — check the same `kubectl explain` output for whether a `SecretRef`-style field exists alongside the literal one.
 
-## 5.4 Wire it into the EnvoyProxy tracing config
+## 6.4 Wire it into the EnvoyProxy tracing config
 
-Replace the `backendRefs` entry in `gateway-yaml/02-gateway-config.yaml` (the same `EnvoyProxy` resource from step 4) to point at your new `Backend` instead of the add-ons chart's collector:
+Replace the `backendRefs` entry in `gateway-yaml/02-gateway-config.yaml` (the same `EnvoyProxy` resource from step 5) to point at your new `Backend` instead of the add-ons chart's collector:
 
 ```yaml
 apiVersion: gateway.envoyproxy.io/v1alpha1
@@ -132,7 +132,7 @@ spec:
         name: envoy-gateway-default
   telemetry:
     tracing:
-      samplingRate: 100   # drop this in production, see step 4's notes
+      samplingRate: 100   # drop this in production, see step 5's notes
       provider:
         type: OpenTelemetry
         backendRefs:
@@ -153,13 +153,13 @@ kubectl apply -f otel-backend-tls.yaml   # if using the separate BackendTLSPolic
 kubectl apply -f gateway-yaml/02-gateway-config.yaml
 ```
 
-Same restart-and-wait as step 4 — the Envoy proxy Pod picks up the new bootstrap config:
+Same restart-and-wait as step 5 — the Envoy proxy Pod picks up the new bootstrap config:
 
 ```bash
 kubectl get pods -n envoy-gateway-system -w
 ```
 
-## 5.5 Metrics, the same way — but simpler
+## 6.5 Metrics, the same way — but simpler
 
 Unlike tracing, Envoy Gateway's metrics OpenTelemetry sink takes a plain `host`/`port` directly, no `Backend` object needed — this is configured on the cluster-wide `EnvoyGateway` config (a `ConfigMap` in `envoy-gateway-system`, not a CRD), not per-Gateway:
 
@@ -192,7 +192,7 @@ kubectl apply -f envoy-gateway-config.yaml
 kubectl rollout restart deployment envoy-gateway -n envoy-gateway-system
 ```
 
-If you also want to stop exposing the local Prometheus scrape endpoint (since you're pushing to your own collector instead), add `prometheus: {disable: true}` under the same `telemetry.metrics` block — see the note in `04-observability.md`'s production section.
+If you also want to stop exposing the local Prometheus scrape endpoint (since you're pushing to your own collector instead), add `prometheus: {disable: true}` under the same `telemetry.metrics` block — see the note in `05-observability.md`'s production section.
 
 ## Recap
 

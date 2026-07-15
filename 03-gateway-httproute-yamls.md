@@ -272,9 +272,7 @@ curl --resolve example-app.com:443:$GATEWAY_HOST --cacert gw-demo-ca.crt \
 
 ## What's next
 
-Step 4 adds Prometheus/Grafana metrics and OpenTelemetry tracing so you can actually see this traffic split happening, rather than eyeballing curl output. It also builds on the `EnvoyProxy` resource in `gateway-yaml/02-gateway-config.yaml`.
-
-There are also extra policies in `envoy-specific/` beyond this core walkthrough (connection limits, mTLS, rate limiting) — see the note in the README about those, since a couple of them interact with the testing you've been doing above.
+Step 4 covers the Envoy Gateway-specific policy CRDs in `envoy-specific/` (`ClientTrafficPolicy` connection limits/mTLS, `BackendTrafficPolicy` rate limiting, `SecurityPolicy`) — a couple of them interact with the plain-curl testing you've been doing above, so read that step before applying them. Step 5 adds Prometheus/Grafana metrics and OpenTelemetry tracing so you can actually see this traffic split happening, rather than eyeballing curl output; it builds on the `EnvoyProxy` resource in `gateway-yaml/02-gateway-config.yaml`. Step 6 (optional) covers pointing tracing/metrics at your own external OTel collector instead.
 
 ## Sources
 - [HTTPRoute API reference | Gateway API](https://gateway-api.sigs.k8s.io/reference/spec/#gateway.networking.k8s.io/v1.httproute)

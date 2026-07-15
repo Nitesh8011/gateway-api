@@ -2,7 +2,7 @@
 
 Part of a production walkthrough series. Next parts: 02 TLS (cert-manager), 03 Gateway/HTTPRoute YAMLs, 04 Observability.
 
-App used throughout this series: `example-app.com`. Everything (Gateway, HTTPRoute, Certificates, backend apps) lives in the `envoy-gateway-system` namespace in this setup — not `default`.
+App used throughout this series: `example-app.com`. Everything (Gateway, HTTPRoute, Certificates, backend apps) lives in the `envoy-gateway-system` namespace in this setup.
 
 Files referenced below live in `gateway-yaml/` in this repo.
 

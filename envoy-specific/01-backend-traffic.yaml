@@ -1,5 +1,5 @@
 apiVersion: gateway.envoyproxy.io/v1alpha1
-kind: BackendTrafficPolicy 
+kind: BackendTrafficPolicy
 metadata:
   name: ratelimit-httproute
   namespace: envoy-gateway-system

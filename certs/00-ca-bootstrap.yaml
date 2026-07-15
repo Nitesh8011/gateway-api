@@ -1,0 +1,31 @@
+# ca-bootstrap.yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-bootstrap
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: gw-demo-root-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: gw-demo-root-ca
+  secretName: gw-demo-root-ca-secret
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: selfsigned-bootstrap
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: gw-demo-ca-issuer
+spec:
+  ca:
+    secretName: gw-demo-root-ca-secret
