@@ -20,7 +20,7 @@ kubectl get pods -n monitoring
 kubectl get svc -n monitoring
 ```
 
-Note the exact Service names printed (they're prefixed with the release name, e.g. `eg-addons-grafana`, `eg-addons-opentelemetry-collector`, `eg-addons-tempo`) — the tracing config below and the commands after it assume these exact names. If your install used a different Helm release name, adjust accordingly.
+Note the exact Service names printed (they're prefixed with the release name, e.g. `grafana`, `eg-addons-opentelemetry-collector`, `eg-addons-tempo`) — the tracing config below and the commands after it assume these exact names. If your install used a different Helm release name, adjust accordingly.
 
 ## 5.2 Metrics are already flowing — no extra config needed
 
@@ -37,7 +37,7 @@ curl localhost:19001/metrics | head -20
 ## 5.3 View metrics in Grafana
 
 ```bash
-kubectl port-forward -n monitoring svc/eg-addons-grafana 3000:80
+kubectl port-forward -n monitoring svc/grafana 3000:80
 ```
 
 Open `http://localhost:3000`. Default credentials for this chart are `admin` / `admin`; if that doesn't work, fetch the generated password:
@@ -91,7 +91,7 @@ spec:
       provider:
         type: OpenTelemetry
         backendRefs:
-          - name: eg-addons-opentelemetry-collector
+          - name: otel-collector
             namespace: monitoring
             port: 4317
       customTags:

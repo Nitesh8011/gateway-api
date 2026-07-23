@@ -30,7 +30,7 @@ spec:
       provider:
         type: OpenTelemetry
         backendRefs:
-          - name: eg-addons-opentelemetry-collector
+          - name: otel-collector
             namespace: monitoring
             port: 4317
       customTags:

@@ -1,6 +1,6 @@
 # Step 1 — Install Envoy Gateway (minikube)
 
-Part of a production walkthrough series. Next parts: 02 TLS (cert-manager), 03 Gateway/HTTPRoute YAMLs, 04 Observability.
+Part of a production walkthrough series. Next parts: 02 TLS (cert-manager), 03 Gateway/HTTPRoute YAMLs, 04 Envoy-specific policies, 05 Observability, 06 (optional) external OTel endpoint.
 
 App used throughout this series: `example-app.com`. Everything (Gateway, HTTPRoute, Certificates, backend apps) lives in the `envoy-gateway-system` namespace in this setup.
 
@@ -73,7 +73,7 @@ kubectl get gatewayclass envoy-gateway -o wide
 
 `ACCEPTED` should flip to `True` within a few seconds.
 
-Note: `gateway-yaml/02-gateway-config.yaml` (next in step 4/observability) later re-applies this same `GatewayClass` object with a `parametersRef` added, pointing at an `EnvoyProxy` resource. That's intentional layering, not a conflict — but don't re-apply `00-gatewayclass.yaml` on its own after `02` has run, since doing so would silently strip the `parametersRef` back out.
+Note: `gateway-yaml/02-gateway-config.yaml` (used starting in step 5/observability) later re-applies this same `GatewayClass` object with a `parametersRef` added, pointing at an `EnvoyProxy` resource. That's intentional layering, not a conflict — but don't re-apply `00-gatewayclass.yaml` on its own after `02` has run, since doing so would silently strip the `parametersRef` back out.
 
 ## 1.4 Create the Gateway
 
@@ -130,7 +130,7 @@ One thing worth flagging now, before it's easy to forget: because the `http` lis
 
 ## What's next
 
-Step 2 issues the cert-manager certificate this Gateway's `https` listener is already referencing, so `ResolvedRefs`/`Programmed` on it goes `True`. Step 3 adds the actual HTTPRoute and backend app. Step 4 adds Prometheus/Grafana + OpenTelemetry tracing (via the `EnvoyProxy` resource introduced in `02-gateway-config.yaml`).
+Step 2 issues the cert-manager certificate this Gateway's `https` listener is already referencing, so `ResolvedRefs`/`Programmed` on it goes `True`. Step 3 adds the actual HTTPRoute and backend app. Step 4 covers the Envoy Gateway-specific policy CRDs. Step 5 adds Prometheus/Grafana + OpenTelemetry tracing (via the `EnvoyProxy` resource introduced in `02-gateway-config.yaml`).
 
 ## Sources
 - [Install with Helm | Envoy Gateway](https://gateway.envoyproxy.io/docs/install/install-helm/)
