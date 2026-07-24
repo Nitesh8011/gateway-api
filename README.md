@@ -27,7 +27,11 @@ gateway-yaml/
   00-gatewayclass.yaml     GatewayClass (base — see note below)
   01-gateway.yaml          Gateway "gateway-api": http + https listeners
   02-gateway-config.yaml   GatewayClass (re-applied with parametersRef) + EnvoyProxy + tracing
-  03-httproute.yaml        HTTPRoute "example-app-go": canary split active, header/redirect/rewrite rules present but commented out
+  03-httproute/            split into one HTTPRoute object per feature (all bind to the same Gateway/hostname; Gateway API merges their rules):
+    00-canary-split.yaml     "example-app-go" — basic routing + weighted 90/10 canary split
+    01-header-canary.yaml    "example-app-go-header-canary" — x-canary:true header forces v2
+    02-redirect.yaml         "example-app-go-redirect" — /old → 301 redirect to /
+    03-rewrite.yaml          "example-app-go-rewrite" — /v2/* rewritten to / on example-app-go-v2
 certs/
   00-ca-bootstrap.yaml     self-signed root CA + CA ClusterIssuer
   01-app-cert.yaml         Certificate for example-app.com → example-app-tls-secret

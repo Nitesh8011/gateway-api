@@ -1,0 +1,27 @@
+# URLRewrite: invisible to the client. Requests to /v2/* are forwarded to
+# example-app-go-v2 with the "/v2" prefix stripped, so the backend only ever
+# sees "/". No redirect, no second request.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: example-app-go-rewrite
+  namespace: envoy-gateway-system
+spec:
+  parentRefs:
+    - name: gateway-api
+  hostnames:
+    - example-app.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v4
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: example-app-go-v2
+          port: 8080
