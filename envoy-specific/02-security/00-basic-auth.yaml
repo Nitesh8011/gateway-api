@@ -1,0 +1,29 @@
+# Basic Auth on the example-app-go HTTPRoute.
+# users.txt entries must be generated with `htpasswd -nbB <user> <password>`
+# (bcrypt) — Envoy Gateway only accepts bcrypt-hashed entries for basicAuth.
+# The hash below is for demo-user / demo-password — swap before real use.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: example-app-basic-auth
+  namespace: envoy-gateway-system
+type: Opaque
+stringData:
+  # generated with: htpasswd -nbB demo-user demo-password
+  # key MUST be named ".htpasswd" — Envoy Gateway looks up this exact key.
+  .htpasswd: |
+    demo-user:$2b$12$2ize9jsg8Z456Am8KWpt/eK6oQ47UfdzyFuHOwxZepC4/fb9rmPIG
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: example-app-basic-auth
+  namespace: envoy-gateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: example-app-go
+  basicAuth:
+    users:
+      name: example-app-basic-auth
