@@ -1,0 +1,36 @@
+# Retries + circuit breaking on the example-app-go-rewrite HTTPRoute.
+#
+# Targets example-app-go-rewrite, NOT example-app-go — ratelimit-httproute
+# (00-rate-limit.yaml) already targets example-app-go, and BackendTrafficPolicy
+# only honors one policy per target (same rule as ClientTrafficPolicy/SecurityPolicy).
+#
+# Testing caveat: the backend here is hashicorp/http-echo, which always
+# returns 200 instantly — it has no /status/500 or ?delay= endpoint like
+# Envoy Gateway's official docs use to demo these features. See the testing
+# notes below for workarounds specific to this repo's backend.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: resilience-httproute
+  namespace: envoy-gateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: example-app-go
+  retry:
+    numRetries: 5
+    perRetry:
+      backOff:
+        baseInterval: 100ms
+        maxInterval: 10s
+      timeout: 250ms
+    retryOn:
+      httpStatusCodes:
+        - 503
+      triggers:
+        - connect-failure
+        - retriable-status-codes
+  circuitBreaker:
+    maxParallelRequests: 2
+    maxPendingRequests: 0

@@ -14,3 +14,6 @@ spec:
       - limit:
           requests: 10
           unit: Second
+
+
+# hey -n 20 -c 20 -host example-app.com https://$GATEWAY_HOST/

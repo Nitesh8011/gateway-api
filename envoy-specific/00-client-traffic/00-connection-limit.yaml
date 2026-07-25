@@ -11,3 +11,10 @@ spec:
   connection:
     connectionLimit:
       value: 5
+
+
+
+# for i in $(seq 1 15); do
+#   curl -s -o /dev/null -w "%{http_code}\n" --resolve example-app.com:443:$GATEWAY_HOST --cacert gw-demo-ca.crt https://example-app.com/ &
+# done
+# wait
