@@ -1,0 +1,30 @@
+# Plain Prometheus (prometheus-community/prometheus chart) — not
+# kube-prometheus-stack. The chart's default scrape config already includes a
+# "kubernetes-pods" job that auto-discovers any pod carrying
+# prometheus.io/scrape: "true" annotations, which is exactly how Envoy Gateway
+# exposes its control-plane and data-plane metrics (same mechanism the
+# eg-addons chart's bundled Prometheus relies on in 05-observability.md) — so
+# no extraScrapeConfigs needed here.
+
+alertmanager:
+  enabled: false
+
+prometheus-pushgateway:
+  enabled: false
+
+server:
+  persistentVolume:
+    enabled: false   # set true + a storageClass for anything beyond a demo cluster
+  retention: "24h"
+  resources: {}
+
+# This chart also pulls in kube-state-metrics and prometheus-node-exporter as
+# subchart dependencies by default (not something we asked for explicitly,
+# but they ship enabled) — same resources: {} treatment as Loki/Tempo, to
+# avoid Pending pods on a small demo cluster. Put real limits back before
+# production.
+kube-state-metrics:
+  resources: {}
+
+prometheus-node-exporter:
+  resources: {}

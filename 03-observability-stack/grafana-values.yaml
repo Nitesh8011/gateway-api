@@ -1,0 +1,36 @@
+# Grafana, wired to the three datasources above via provisioning.
+#
+# Service names below assume you install with the release names used in
+# 07-external-observability-stack.md (`loki`, `tempo`, `prometheus`, all in
+# the `observability` namespace). If you use different release names, the
+# Service names change accordingly — confirm with:
+#   kubectl get svc -n observability
+# before applying, same caveat 05-observability.md calls out for the
+# add-ons chart's Service names.
+
+adminUser: admin
+adminPassword: admin   # change before this is anywhere but a learning cluster
+
+resources: {}   # same reasoning as Loki/Tempo/Prometheus — no requests/limits on this demo cluster
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-server.observability.svc.cluster.local
+        access: proxy
+        isDefault: true
+      - name: Loki
+        type: loki
+        url: http://loki-gateway.observability.svc.cluster.local
+        access: proxy
+      - name: Tempo
+        type: tempo
+        url: http://tempo.observability.svc.cluster.local:3200
+        access: proxy
+
+
+
+# helm --install update grafana grafana-community/grafana -f 03-observability-stack/grafana-values.yaml -n observability

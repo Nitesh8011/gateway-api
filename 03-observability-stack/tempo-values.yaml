@@ -1,0 +1,44 @@
+# Tempo, monolithic mode (the plain `tempo` chart, NOT `tempo-distributed` —
+# that one is for microservices mode). Same chart repo migration as Loki:
+# grafana-community/helm-charts as of early 2026.
+#
+# NOTE: I could not pull this chart's live values.yaml this session (fetch was
+# blocked), so this is the standard/well-known shape for the monolithic chart,
+# not verified against the exact current schema. Before applying, sanity-check
+# field names with:
+#   helm show values grafana-community/tempo > /tmp/tempo-default-values.yaml
+# and diff against what's below — flag anything that doesn't match and I'll
+# adjust.
+
+persistence:
+  enabled: true
+  size: 10Gi
+
+traces:
+  otlp:
+    grpc:
+      enabled: true
+    http:
+      enabled: true
+  jaeger:
+    thriftHttp:
+      enabled: true
+  zipkin:
+    enabled: true
+
+# Local filesystem storage — fine for a single-replica learning setup.
+# Swap for S3/GCS backend before production.
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal
+
+retention: 24h
+
+# fix: avoids the pod getting stuck Pending on a small demo cluster with tight
+# node capacity. Fine here; put real limits back before this touches anything
+# beyond a learning cluster.
+resources: {}

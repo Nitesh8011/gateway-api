@@ -2,7 +2,7 @@
 
 For when you already run an OpenTelemetry collector somewhere (in-cluster or external), with its own TLS cert and an auth token/API key it expects on incoming OTLP data, and you don't want the add-ons chart's bundled Prometheus/Grafana/Tempo/OTel Collector from step 5 at all.
 
-Skip `05-observability.md`'s `helm install eg-addons ...` entirely — that chart is only there to give you *something* to point at for learning. If you already have a real collector, none of that needs to exist in this cluster.
+Skip `readme.md`'s (in this same folder) monolithic Loki/Tempo/Prometheus/Grafana stack entirely — that stack is only there to give you *something* to point at for learning. If you already have a real collector, none of that needs to exist in this cluster.
 
 ## The key thing to understand first
 
@@ -114,7 +114,7 @@ If a plaintext token in the CRD isn't acceptable for your setup, the safer patte
 
 ## 6.4 Wire it into the EnvoyProxy tracing config
 
-Replace the `backendRefs` entry in `gateway-yaml/02-gateway-config.yaml` (the same `EnvoyProxy` resource from step 5) to point at your new `Backend` instead of the add-ons chart's collector:
+Replace the `backendRefs` entry in `01-gateway/02-gateway-config.yaml` (the same `EnvoyProxy` resource from step 5) to point at your new `Backend` instead of the add-ons chart's collector:
 
 ```yaml
 apiVersion: gateway.envoyproxy.io/v1alpha1
@@ -150,7 +150,7 @@ spec:
 ```bash
 kubectl apply -f otel-backend.yaml
 kubectl apply -f otel-backend-tls.yaml   # if using the separate BackendTLSPolicy option
-kubectl apply -f gateway-yaml/02-gateway-config.yaml
+kubectl apply -f 01-gateway/02-gateway-config.yaml
 ```
 
 Same restart-and-wait as step 5 — the Envoy proxy Pod picks up the new bootstrap config:
@@ -192,7 +192,7 @@ kubectl apply -f envoy-gateway-config.yaml
 kubectl rollout restart deployment envoy-gateway -n envoy-gateway-system
 ```
 
-If you also want to stop exposing the local Prometheus scrape endpoint (since you're pushing to your own collector instead), add `prometheus: {disable: true}` under the same `telemetry.metrics` block — see the note in `05-observability.md`'s production section.
+If you also want to stop exposing the local Prometheus scrape endpoint (since you're pushing to your own collector instead), add `prometheus: {disable: true}` under the same `telemetry.metrics` block.
 
 ## Recap
 

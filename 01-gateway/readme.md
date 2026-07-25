@@ -4,7 +4,7 @@ Part of a production walkthrough series. Next parts: 02 TLS (cert-manager), 03 G
 
 App used throughout this series: `example-app.com`. Everything (Gateway, HTTPRoute, Certificates, backend apps) lives in the `envoy-gateway-system` namespace in this setup.
 
-Files referenced below live in `gateway-yaml/` in this repo.
+Files referenced below live in `01-gateway/` in this repo.
 
 ## 1.1 Start minikube
 
@@ -55,7 +55,7 @@ You should see one `envoy-gateway` pod (the control plane). No data-plane Envoy 
 
 ## 1.3 Create the GatewayClass
 
-`gateway-yaml/00-gatewayclass.yaml`:
+`01-gateway/00-gatewayclass.yaml`:
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
@@ -67,17 +67,17 @@ spec:
 ```
 
 ```bash
-kubectl apply -f gateway-yaml/00-gatewayclass.yaml
+kubectl apply -f 01-gateway/00-gatewayclass.yaml
 kubectl get gatewayclass envoy-gateway -o wide
 ```
 
 `ACCEPTED` should flip to `True` within a few seconds.
 
-Note: `gateway-yaml/02-gateway-config.yaml` (used starting in step 5/observability) later re-applies this same `GatewayClass` object with a `parametersRef` added, pointing at an `EnvoyProxy` resource. That's intentional layering, not a conflict — but don't re-apply `00-gatewayclass.yaml` on its own after `02` has run, since doing so would silently strip the `parametersRef` back out.
+Note: `01-gateway/02-gateway-config.yaml` (used starting in step 5/observability) later re-applies this same `GatewayClass` object with a `parametersRef` added, pointing at an `EnvoyProxy` resource. That's intentional layering, not a conflict — but don't re-apply `00-gatewayclass.yaml` on its own after `02` has run, since doing so would silently strip the `parametersRef` back out.
 
 ## 1.4 Create the Gateway
 
-`gateway-yaml/01-gateway.yaml` — this repo's setup keeps **both** an HTTP and an HTTPS listener on the Gateway from the start (rather than upgrading later), in the `envoy-gateway-system` namespace:
+`01-gateway/01-gateway.yaml` — this repo's setup keeps **both** an HTTP and an HTTPS listener on the Gateway from the start (rather than upgrading later), in the `envoy-gateway-system` namespace:
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
@@ -114,7 +114,7 @@ spec:
 For now, apply just the `GatewayClass` + the listener shape without a real cert yet — the `https` listener's `certificateRefs` won't resolve until step 2 issues `example-app-tls-secret`, so `ResolvedRefs` on that listener will show `False` until then. That's expected at this point.
 
 ```bash
-kubectl apply -f gateway-yaml/01-gateway.yaml
+kubectl apply -f 01-gateway/01-gateway.yaml
 kubectl get gateway gateway-api -n envoy-gateway-system
 ```
 

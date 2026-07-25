@@ -1,0 +1,95 @@
+# Loki, monolithic mode, single replica — learning/demo cluster only.
+# Chart moved to the Grafana Community repo (grafana-community/helm-charts) as
+# of March 2026. As of chart v12+, "SingleBinary" was renamed "Monolithic" —
+# deploymentMode: Monolithic below is required, not optional.
+#
+# Uses the chart's bundled MinIO as object storage so there's no cloud
+# dependency to stand this up. Swap minio.enabled: false + loki.storage for a
+# real S3/GCS/Azure bucket before this goes anywhere near production traffic.
+#
+# The chart now hard-fails on minio.enabled: true unless you explicitly
+# acknowledge it's deprecated (removal date 2026-10-31 per the chart's own
+# validation error) — ignoreMinioDeprecation: true below is that
+# acknowledgment, not a real config knob. Before that removal date, this whole
+# file needs to move to an external object store regardless of what we do here.
+ignoreMinioDeprecation: true
+
+loki:
+  commonConfig:
+    replication_factor: 1
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: s3
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+  pattern_ingester:
+    enabled: true
+  limits_config:
+    allow_structured_metadata: true
+    volume_enabled: true
+  ruler:
+    enable_api: true
+
+minio:
+  enabled: true
+  resources: {}
+
+# chunksCache and resultsCache are both memcached-based and derive pod
+# resources from allocatedMemory (the -m flag), same as discovered for
+# chunksCache above — a plain resources: {} override gets recomputed away, so
+# this is the actual knob for both.
+chunksCache:
+  allocatedMemory: 64
+
+resultsCache:
+  allocatedMemory: 64
+
+# Everything else in the chart (singleBinary, gateway, minio, the canary) uses
+# a plain resources field, so resources: {} does strip requests/limits here —
+# same reasoning as tempo-values.yaml: avoids Pending pods on a small demo
+# cluster, put real limits back before production.
+gateway:
+  resources: {}
+
+test:
+  canary:
+    resources: {}
+
+deploymentMode: Monolithic
+
+singleBinary:
+  replicas: 1
+  resources: {}
+
+# Zero out replica counts of the other deployment modes — required by the
+# chart even when only using Monolithic mode.
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+ingester:
+  replicas: 0
+querier:
+  replicas: 0
+queryFrontend:
+  replicas: 0
+queryScheduler:
+  replicas: 0
+distributor:
+  replicas: 0
+compactor:
+  replicas: 0
+indexGateway:
+  replicas: 0
+bloomPlanner:
+  replicas: 0
+bloomBuilder:
+  replicas: 0
+bloomGateway:
+  replicas: 0

@@ -30,8 +30,8 @@ spec:
       provider:
         type: OpenTelemetry
         backendRefs:
-          - name: otel-collector
-            namespace: monitoring
+          - name: tempo
+            namespace: observability
             port: 4317
       customTags:
         "k8s.pod.name":
