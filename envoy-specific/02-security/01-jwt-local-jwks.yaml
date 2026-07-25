@@ -1,0 +1,62 @@
+# JWT auth using a local JWKS (ConfigMap) — no external IdP needed.
+#
+# Targets `example-app-go-rewrite` (the /v4 -> v2 URLRewrite route from step 3),
+# NOT `example-app-go` — that route already has the Basic Auth SecurityPolicy
+# from 00-basic-auth.yaml, and Envoy Gateway only honors ONE SecurityPolicy per
+# target (a second one on the same target gets status Conflicted, not merged).
+# Pick a different route per auth mechanism you want to test concurrently, or
+# apply only one of 00-basic-auth.yaml / 01-jwt-local-jwks.yaml at a time.
+#
+# The public key below (JWKS) pairs with the private signing key at
+# certs/jwt-signing-key.pem (gitignored — demo-only, do not reuse in prod).
+# Mint test tokens with envoy-specific/02-security/mint-jwt.py.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: example-app-jwt
+  namespace: envoy-gateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: example-app-go
+  jwt:
+    providers:
+      - name: gw-demo-jwt
+        issuer: "https://gw-demo.local/issuer"
+        audiences:
+          - "gw-demo-app"
+        localJWKS:
+          type: ValueRef
+          valueRef:
+            group: ""
+            kind: ConfigMap
+            name: gw-demo-jwt-jwks
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gw-demo-jwt-jwks
+  namespace: envoy-gateway-system
+data:
+  jwks: |
+    {
+      "keys": [
+        {
+          "kty": "RSA",
+          "use": "sig",
+          "alg": "RS256",
+          "kid": "gw-demo-jwt-key-1",
+          "n": "zIXEIGsxTYJ9iMT9r4IqJQwx6Z9nvhJ1uatbYOjcV7Mw8gXrBuOdfWIJgGIxPDKBzXe13YLDa7_WfxsKC_bgtU5aPZKZCLpC59hEwbjvIE3REHI2hD2t1IP1dLfwK6wC6YWnsPLy4zyVx2slv2fuDidTas8BdKMNUVAQ4aAozSxLf65bTGBmfctNLHYt7_bRtkeOdfoVwCkLfKkS6H2-OR-rir_5f6zksCZJORTtUXJxIzwtD4CidsPDtayLxQYanm-zvIfU313vx00_C8n7isq3OfA65Fb9FNy7aCXDOc4ioGpIN_E_z9SdKeoqIZiBSBOgQNvtHB57BOfHP4P2Uw",
+          "e": "AQAB"
+        }
+      ]
+    }
+
+
+
+# no token -> 401
+# curl -i --resolve example-app.com:443:$GATEWAY_HOST --cacert ../../gw-demo-ca.crt https://example-app.com/v4
+
+# valid token -> 200
+# curl -i -H "Authorization: Bearer $TOKEN" --resolve example-app.com:443:$GATEWAY_HOST --cacert ../../gw-demo-ca.crt https://example-app.com/v4
